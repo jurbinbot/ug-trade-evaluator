@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 // ---------------------------------------------------------------------------
 // Default dino data
@@ -132,6 +132,20 @@ function saveSettings(settings) {
   localStorage.setItem(LS_KEY, JSON.stringify(settings))
 }
 
+async function fetchSettingsFromAPI() {
+  const res = await fetch('/api/settings')
+  if (!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+async function pushSettingsToAPI(settings) {
+  await fetch('/api/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+}
+
 // ---------------------------------------------------------------------------
 // Slot factory
 // ---------------------------------------------------------------------------
@@ -252,6 +266,16 @@ export default function App() {
   const [picker, setPicker] = useState(null) // { side, slotIdx } | null
   const [search, setSearch] = useState('')
 
+  // On mount: pull from backend and overwrite localStorage cache
+  useEffect(() => {
+    fetchSettingsFromAPI()
+      .then(data => {
+        setSettings(data)
+        saveSettings(data)
+      })
+      .catch(() => { /* backend unavailable — localStorage fallback already in state */ })
+  }, [])
+
   // Derived
   const allDinos = [...DEFAULT_DINOS, ...settings.customDinos]
   const customCats = Object.keys(settings.customCatColors)
@@ -261,6 +285,7 @@ export default function App() {
   function persist(next) {
     setSettings(next)
     saveSettings(next)
+    pushSettingsToAPI(next).catch(() => { /* silent — localStorage is the fallback */ })
   }
 
   function updateBase(name, val) {
