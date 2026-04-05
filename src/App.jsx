@@ -924,6 +924,7 @@ function DinoPickerModal({ grouped, search, onSearch, onSelect, onClose, getBase
 function SettingsScreen({ allDinos, allCategories, allCatColor, settings,
                           onUpdateBase, onUpdateBundle, onReset, onAddDino, onBack }) {
   const [showAddForm, setShowAddForm] = useState(false)
+  const [editingBase, setEditingBase] = useState(null) // { name, defaultBase, catColor }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -989,13 +990,22 @@ function SettingsScreen({ allDinos, allCategories, allCatColor, settings,
                     </span>
                     {/* Bundle toggle */}
                     <BundleToggle checked={bundle} onChange={v => onUpdateBundle(dino.name, v)} />
-                    {/* Base input */}
-                    <input
-                      type="number"
-                      min={1} max={20}
-                      value={currentBase}
-                      onChange={e => onUpdateBase(dino.name, e.target.value)}
-                    />
+                    {/* Base value button — tap to edit */}
+                    <button
+                      onClick={() => setEditingBase({ name: dino.name, defaultBase: dino.base, catColor })}
+                      style={{
+                        background: modified ? '#7c3aed22' : '#2a2a3d',
+                        border: modified ? '1px solid #7c3aed55' : '1px solid transparent',
+                        borderRadius: 8,
+                        color: modified ? '#a78bfa' : '#bbb',
+                        fontSize: 13, fontWeight: 700,
+                        padding: '6px 12px',
+                        cursor: 'pointer', touchAction: 'manipulation',
+                        minWidth: 56, minHeight: 44,
+                      }}
+                    >
+                      {currentBase}
+                    </button>
                   </div>
                 )
               })}
@@ -1048,6 +1058,137 @@ function SettingsScreen({ allDinos, allCategories, allCatColor, settings,
         }}>
           Reset Base Levels &amp; Bundles to Defaults
         </button>
+      </div>
+
+      {editingBase && (
+        <BaseEditModal
+          name={editingBase.name}
+          defaultBase={editingBase.defaultBase}
+          currentBase={settings.bases[editingBase.name] ?? editingBase.defaultBase}
+          catColor={editingBase.catColor}
+          onChange={val => onUpdateBase(editingBase.name, val)}
+          onClose={() => setEditingBase(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Base Edit Modal
+// ---------------------------------------------------------------------------
+function BaseEditModal({ name, defaultBase, currentBase, catColor, onChange, onClose }) {
+  const overlayRef = useRef(null)
+  const isModified = currentBase !== defaultBase
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={e => { if (e.target === overlayRef.current) onClose() }}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        zIndex: 50,
+        display: 'flex', alignItems: 'flex-end',
+        animation: 'fadeIn 0.15s ease',
+      }}
+    >
+      <div style={{
+        width: '100%',
+        background: '#13131a',
+        borderRadius: '16px 16px 0 0',
+        borderTop: '1px solid #2a2a3d',
+        padding: '0 0 32px',
+        animation: 'slideUp 0.25s ease',
+      }}>
+        {/* Handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
+          <div style={{ width: 40, height: 4, background: '#2a2a3d', borderRadius: 2 }} />
+        </div>
+
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px 16px',
+          borderBottom: '1px solid #1a1a26',
+        }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#f0f0ff' }}>{name}</div>
+            <div style={{ fontSize: 12, color: '#888', marginTop: 3 }}>
+              Default: {defaultBase}
+              {isModified && (
+                <button
+                  onClick={() => onChange(defaultBase)}
+                  style={{
+                    marginLeft: 10, background: 'transparent',
+                    border: '1px solid #2a2a3d', borderRadius: 4,
+                    color: '#888', fontSize: 11, padding: '1px 6px',
+                    cursor: 'pointer', touchAction: 'manipulation',
+                  }}
+                >reset</button>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ ...iconBtnStyle, fontSize: 22, color: '#888' }}>×</button>
+        </div>
+
+        {/* Base value display */}
+        <div style={{ padding: '24px 28px 8px', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Base Level</div>
+          <div style={{ fontSize: 64, fontWeight: 900, color: isModified ? '#a78bfa' : '#f0f0ff', lineHeight: 1 }}>
+            {currentBase}
+          </div>
+        </div>
+
+        {/* Slider 1–20 */}
+        <div style={{ padding: '8px 28px 12px' }}>
+          <input
+            type="range"
+            min={1} max={20}
+            value={currentBase}
+            onChange={e => onChange(Number(e.target.value))}
+            style={{ width: '100%' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: '#444' }}>1</span>
+            <span style={{ fontSize: 11, color: '#444' }}>20</span>
+          </div>
+        </div>
+
+        {/* Stepper buttons for fine control */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, padding: '4px 28px 20px' }}>
+          <button
+            onClick={() => onChange(Math.max(1, currentBase - 1))}
+            style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#2a2a3d', border: 'none',
+              color: '#f0f0ff', fontSize: 24, fontWeight: 700,
+              cursor: 'pointer', touchAction: 'manipulation',
+            }}
+          >−</button>
+          <button
+            onClick={() => onChange(Math.min(20, currentBase + 1))}
+            style={{
+              width: 56, height: 56, borderRadius: '50%',
+              background: '#2a2a3d', border: 'none',
+              color: '#f0f0ff', fontSize: 24, fontWeight: 700,
+              cursor: 'pointer', touchAction: 'manipulation',
+            }}
+          >+</button>
+        </div>
+
+        {/* Done */}
+        <div style={{ padding: '0 20px' }}>
+          <button onClick={onClose} style={{
+            width: '100%', padding: '14px',
+            background: '#7c3aed',
+            border: 'none', borderRadius: 10,
+            color: '#fff', fontSize: 15, fontWeight: 700,
+            cursor: 'pointer', touchAction: 'manipulation',
+          }}>
+            Done
+          </button>
+        </div>
       </div>
     </div>
   )
