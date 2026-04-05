@@ -17,6 +17,12 @@ services:
     environment:
       - PORT=3001
       - DATA_FILE=/data/settings.json
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
     restart: unless-stopped
 
 volumes:
