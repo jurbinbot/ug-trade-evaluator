@@ -263,7 +263,8 @@ export default function App() {
   const [settings, setSettings] = useState(loadSettings)
   // settings = { bases, bundles, customDinos, customCatColors }
 
-  const [picker, setPicker] = useState(null) // { side, slotIdx } | null
+  const [picker, setPicker] = useState(null)      // { side, idx } | null
+  const [editingSlot, setEditingSlot] = useState(null) // { side, idx } | null
   const [search, setSearch] = useState('')
 
   // On mount: pull from backend and overwrite localStorage cache
@@ -363,8 +364,8 @@ export default function App() {
             verdict={verdict}
             getBase={getBase}
             onOpenPicker={openPicker}
+            onEdit={(side, idx) => setEditingSlot({ side, idx })}
             onRemove={(side, idx) => setSlot(side, idx, emptySlot())}
-            onLevelChange={(side, idx, lvl) => setSlot(side, idx, s => ({ ...s, level: Number(lvl) }))}
             onClear={clearTrade}
             onSettings={() => setView('settings')}
             allCatColor={allCatColor}
@@ -393,6 +394,21 @@ export default function App() {
           allCatColor={allCatColor}
         />
       )}
+
+      {editingSlot && (() => {
+        const slots = editingSlot.side === 'left' ? left : right
+        const slot = slots[editingSlot.idx]
+        if (!slot?.dino) return null
+        return (
+          <SlotEditModal
+            slot={slot}
+            getBase={getBase}
+            allCatColor={allCatColor}
+            onLevel={lvl => setSlot(editingSlot.side, editingSlot.idx, s => ({ ...s, level: Number(lvl) }))}
+            onClose={() => setEditingSlot(null)}
+          />
+        )
+      })()}
     </>
   )
 }
@@ -401,7 +417,7 @@ export default function App() {
 // Trade Screen
 // ---------------------------------------------------------------------------
 function TradeScreen({ left, right, leftTotal, rightTotal, verdict, getBase,
-                       onOpenPicker, onRemove, onLevelChange, onClear, onSettings, allCatColor }) {
+                       onOpenPicker, onEdit, onRemove, onClear, onSettings, allCatColor }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', paddingBottom: 148 }}>
       <header style={{
@@ -435,11 +451,11 @@ function TradeScreen({ left, right, leftTotal, rightTotal, verdict, getBase,
       }}>
         <SideColumn label="Your Side" slots={left} side="left"
           getBase={getBase} total={leftTotal}
-          onOpenPicker={onOpenPicker} onRemove={onRemove} onLevelChange={onLevelChange}
+          onOpenPicker={onOpenPicker} onEdit={onEdit} onRemove={onRemove}
           allCatColor={allCatColor} />
         <SideColumn label="Their Side" slots={right} side="right"
           getBase={getBase} total={rightTotal}
-          onOpenPicker={onOpenPicker} onRemove={onRemove} onLevelChange={onLevelChange}
+          onOpenPicker={onOpenPicker} onEdit={onEdit} onRemove={onRemove}
           allCatColor={allCatColor} />
       </div>
 
@@ -451,7 +467,7 @@ function TradeScreen({ left, right, leftTotal, rightTotal, verdict, getBase,
 // ---------------------------------------------------------------------------
 // Side Column
 // ---------------------------------------------------------------------------
-function SideColumn({ label, slots, side, getBase, total, onOpenPicker, onRemove, onLevelChange, allCatColor }) {
+function SideColumn({ label, slots, side, getBase, total, onOpenPicker, onEdit, onRemove, allCatColor }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <div style={{ textAlign: 'center', marginBottom: 2 }}>
@@ -468,8 +484,8 @@ function SideColumn({ label, slots, side, getBase, total, onOpenPicker, onRemove
           slot={slot}
           getBase={getBase}
           onOpen={() => onOpenPicker(side, idx)}
+          onEdit={() => onEdit(side, idx)}
           onRemove={() => onRemove(side, idx)}
-          onLevel={lvl => onLevelChange(side, idx, lvl)}
           allCatColor={allCatColor}
         />
       ))}
@@ -480,7 +496,7 @@ function SideColumn({ label, slots, side, getBase, total, onOpenPicker, onRemove
 // ---------------------------------------------------------------------------
 // Dino Slot
 // ---------------------------------------------------------------------------
-function DinoSlot({ slot, getBase, onOpen, onRemove, onLevel, allCatColor }) {
+function DinoSlot({ slot, getBase, onOpen, onEdit, onRemove, allCatColor }) {
   const { dino, level } = slot
 
   if (!dino) {
@@ -512,32 +528,45 @@ function DinoSlot({ slot, getBase, onOpen, onRemove, onLevel, allCatColor }) {
   const catColor = allCatColor[dino.category] || '#888'
 
   return (
-    <div style={{
-      background: '#13131a',
-      border: '1px solid #2a2a3d',
-      borderRadius: 10,
-      padding: '8px 8px 6px',
-      position: 'relative',
-    }}>
-      <button onClick={onRemove} style={{
-        position: 'absolute',
-        top: 4, right: 4,
-        background: 'transparent',
-        border: 'none',
-        color: '#555',
-        fontSize: 14,
+    <div
+      onClick={onEdit}
+      style={{
+        background: '#13131a',
+        border: '1px solid #2a2a3d',
+        borderRadius: 10,
+        padding: '8px 8px 8px',
+        position: 'relative',
         cursor: 'pointer',
-        padding: '2px 5px',
-        lineHeight: 1,
-        minWidth: 24, minHeight: 24,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
         touchAction: 'manipulation',
-      }} aria-label="Remove">×</button>
+        userSelect: 'none',
+      }}
+    >
+      {/* Remove button — stopPropagation so it doesn't trigger onEdit */}
+      <button
+        onClick={e => { e.stopPropagation(); onRemove() }}
+        style={{
+          position: 'absolute',
+          top: 4, right: 4,
+          background: 'transparent',
+          border: 'none',
+          color: '#555',
+          fontSize: 14,
+          cursor: 'pointer',
+          padding: '2px 5px',
+          lineHeight: 1,
+          minWidth: 24, minHeight: 24,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          touchAction: 'manipulation',
+        }}
+        aria-label="Remove"
+      >×</button>
 
+      {/* Dino name */}
       <div style={{ fontSize: 11, fontWeight: 700, color: '#f0f0ff', paddingRight: 20, lineHeight: 1.3 }}>
         {dino.name}
       </div>
 
+      {/* Badges */}
       <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
         <span style={{
           background: catColor + '22', color: catColor,
@@ -545,10 +574,6 @@ function DinoSlot({ slot, getBase, onOpen, onRemove, onLevel, allCatColor }) {
           borderRadius: 4, fontSize: 9, fontWeight: 700,
           padding: '1px 4px', textTransform: 'uppercase', letterSpacing: 0.5,
         }}>{dino.category}</span>
-        <span style={{
-          background: '#2a2a3d', color: '#bbb',
-          borderRadius: 4, fontSize: 9, fontWeight: 700, padding: '1px 4px',
-        }}>Base {base}</span>
         {bundle && (
           <span style={{
             background: '#78350f', color: '#fbbf24',
@@ -558,22 +583,145 @@ function DinoSlot({ slot, getBase, onOpen, onRemove, onLevel, allCatColor }) {
         )}
       </div>
 
-      <div style={{ marginTop: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-          <span style={{ fontSize: 10, color: '#888' }}>Lv</span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#f0f0ff' }}>{level}</span>
-        </div>
-        <input
-          type="range"
-          min={1} max={100}
-          value={level}
-          onChange={e => onLevel(e.target.value)}
-          style={{ width: '100%' }}
-        />
+      {/* Level + value row */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        marginTop: 6,
+      }}>
+        <span style={{
+          fontSize: 11, color: '#888',
+        }}>
+          Lv <span style={{ color: '#f0f0ff', fontWeight: 700 }}>{level}</span>
+        </span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#7c3aed' }}>
+          ⚡ {value.toFixed(1)}
+        </span>
       </div>
 
-      <div style={{ marginTop: 4, fontSize: 11, fontWeight: 700, color: '#7c3aed', textAlign: 'right' }}>
-        ⚡ {value.toFixed(1)}
+      {/* Tap hint */}
+      <div style={{ fontSize: 9, color: '#3a3a55', marginTop: 3, textAlign: 'right' }}>
+        tap to adjust
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Slot Edit Modal
+// ---------------------------------------------------------------------------
+function SlotEditModal({ slot, getBase, allCatColor, onLevel, onClose }) {
+  const { dino, level } = slot
+  const base = getBase(dino)
+  const bundle = dino.isBundle ?? false
+  const value = dinoValue(base, level, bundle)
+  const catColor = allCatColor[dino.category] || '#888'
+  const overlayRef = useRef(null)
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={e => { if (e.target === overlayRef.current) onClose() }}
+      style={{
+        position: 'fixed', inset: 0,
+        background: 'rgba(0,0,0,0.7)',
+        zIndex: 50,
+        display: 'flex', alignItems: 'flex-end',
+        animation: 'fadeIn 0.15s ease',
+      }}
+    >
+      <div style={{
+        width: '100%',
+        background: '#13131a',
+        borderRadius: '16px 16px 0 0',
+        borderTop: '1px solid #2a2a3d',
+        padding: '0 0 32px',
+        animation: 'slideUp 0.25s ease',
+      }}>
+        {/* Handle */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 8px' }}>
+          <div style={{ width: 40, height: 4, background: '#2a2a3d', borderRadius: 2 }} />
+        </div>
+
+        {/* Header */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 20px 16px',
+          borderBottom: '1px solid #1a1a26',
+        }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#f0f0ff' }}>{dino.name}</div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
+              <span style={{
+                background: catColor + '22', color: catColor,
+                border: `1px solid ${catColor}55`,
+                borderRadius: 4, fontSize: 10, fontWeight: 700,
+                padding: '2px 6px', textTransform: 'uppercase', letterSpacing: 0.5,
+              }}>{dino.category}</span>
+              <span style={{
+                background: '#2a2a3d', color: '#bbb',
+                borderRadius: 4, fontSize: 10, fontWeight: 700, padding: '2px 6px',
+              }}>Base {base}</span>
+              {bundle && (
+                <span style={{
+                  background: '#78350f', color: '#fbbf24',
+                  border: '1px solid #92400e',
+                  borderRadius: 4, fontSize: 10, fontWeight: 700, padding: '2px 6px',
+                }}>📦 +5</span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ ...iconBtnStyle, fontSize: 22, color: '#888' }}>×</button>
+        </div>
+
+        {/* Level display */}
+        <div style={{ padding: '24px 28px 8px', textAlign: 'center' }}>
+          <div style={{ fontSize: 13, color: '#888', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Level</div>
+          <div style={{ fontSize: 56, fontWeight: 900, color: '#f0f0ff', lineHeight: 1 }}>{level}</div>
+        </div>
+
+        {/* Slider */}
+        <div style={{ padding: '8px 28px 20px' }}>
+          <input
+            type="range"
+            min={1} max={100}
+            value={level}
+            onChange={e => onLevel(e.target.value)}
+            style={{ width: '100%' }}
+          />
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
+            <span style={{ fontSize: 11, color: '#444' }}>1</span>
+            <span style={{ fontSize: 11, color: '#444' }}>100</span>
+          </div>
+        </div>
+
+        {/* Value breakdown */}
+        <div style={{
+          margin: '0 20px 20px',
+          background: '#0a0a0f',
+          borderRadius: 10,
+          padding: '12px 16px',
+          textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 11, color: '#888', marginBottom: 4 }}>
+            {base} × (1 + {level}/100){bundle ? ' + 5' : ''}
+          </div>
+          <div style={{ fontSize: 28, fontWeight: 900, color: '#7c3aed' }}>
+            ⚡ {value.toFixed(1)}
+          </div>
+        </div>
+
+        {/* Done */}
+        <div style={{ padding: '0 20px' }}>
+          <button onClick={onClose} style={{
+            width: '100%', padding: '14px',
+            background: '#7c3aed',
+            border: 'none', borderRadius: 10,
+            color: '#fff', fontSize: 15, fontWeight: 700,
+            cursor: 'pointer', touchAction: 'manipulation',
+          }}>
+            Done
+          </button>
+        </div>
       </div>
     </div>
   )
