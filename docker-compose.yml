@@ -2,7 +2,7 @@ services:
   frontend:
     image: ghcr.io/jurbinbot/ug-trade-evaluator-frontend:latest
     ports:
-      - "80:80"
+      - "0.0.0.0:8082:80"
     depends_on:
       backend:
         condition: service_healthy
